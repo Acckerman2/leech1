@@ -2,18 +2,22 @@
 import asyncio
 import io
 import re
-from typing import Dict, List
+from time import time
+from types import SimpleNamespace
+from typing import Dict, List, Optional
 
 import cloudscraper
 from bs4 import BeautifulSoup
+from pyrogram.enums import ChatType
 from pyrogram.errors import RPCError
 from pyrogram.filters import command
 from pyrogram.handlers import MessageHandler
 
-from bot import LOGGER, bot, config_dict, user
+from bot import LOGGER, OWNER_ID, bot, config_dict
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.message_utils import sendMessage
+from bot.modules.mirror_leech import _mirror_leech
 
 _BASE_URL = "https://www.1tamilmv.land/"
 _MAX_TOPICS = 15
@@ -24,7 +28,44 @@ _monitor_task: asyncio.Task | None = None
 _monitor_last_links: set[str] = set()
 _monitor_seen_topics: set[str] = set()
 _monitor_command_chat: int | str | None = None
-_warned_missing_user = False
+_command_chat_cache: Optional[tuple[int | str, SimpleNamespace]] = None
+
+
+class _AutoUser:
+    def __init__(self, user_id: int, name: str = "TamilAuto") -> None:
+        self.id = user_id
+        self.first_name = name
+        self.username = None
+
+    @property
+    def mention(self) -> str:
+        return f"<a href='tg://user?id={self.id}'>{self.first_name}</a>"
+
+
+class _AutoCommandMessage:
+    def __init__(self, chat: SimpleNamespace, link: str, title: str) -> None:
+        self.chat = chat
+        self.id = int(time() * 1000)
+        self.text = f"/{BotCommands.QbLeechCommand[0]} {link}"
+        self.reply_to_message = None
+        self.reply_to_message_id = None
+        self.sender_chat = None
+        self.link = ""
+        self.from_user = _AutoUser(OWNER_ID)
+        self.title = title
+
+    async def reply(self, text: str, **kwargs):
+        kwargs.pop('quote', None)
+        kwargs.pop('reply_to_message_id', None)
+        return await bot.send_message(self.chat.id, text=text, **kwargs)
+
+    async def reply_photo(self, photo, caption: str | None = None, **kwargs):
+        kwargs.pop('quote', None)
+        kwargs.pop('reply_to_message_id', None)
+        return await bot.send_photo(self.chat.id, photo=photo, caption=caption, **kwargs)
+
+    async def unpin(self):
+        return
 
 
 def _extract_size(text: str) -> str:
@@ -120,24 +161,36 @@ def _sanitize_filename(name: str) -> str:
     return f"{safe or 'tbl_torrent'}.torrent"
 
 
-async def _trigger_qbleech(link: str) -> None:
-    global _warned_missing_user
-    command_chat = _monitor_command_chat or config_dict.get('AUTO_TBL_COMMAND_CHAT')
-    if not command_chat:
-        LOGGER.info("AUTO_TBL_COMMAND_CHAT not configured; skipping /qbleech trigger for %s", link)
-        return
-    if not user:
-        if not _warned_missing_user:
-            LOGGER.warning("USER_SESSION_STRING not configured; cannot auto trigger /qbleech commands.")
-            _warned_missing_user = True
-        return
-    cmd_name = BotCommands.QbLeechCommand[0]
-    command_text = f"/{cmd_name} {link}"
+async def _resolve_command_chat(chat_ref: int | str) -> Optional[SimpleNamespace]:
+    global _command_chat_cache
+    if _command_chat_cache and _command_chat_cache[0] == chat_ref:
+        return _command_chat_cache[1]
     try:
-        await user.send_message(command_chat, command_text, disable_web_page_preview=True)
-        LOGGER.info("Triggered /%s for %s", cmd_name, link)
+        chat = await bot.get_chat(chat_ref)
+    except RPCError as exc:
+        LOGGER.error("Failed to resolve AUTO_TBL command chat %s: %s", chat_ref, exc)
+        return None
+    chat_stub = SimpleNamespace(id=chat.id, type=chat.type if chat.type else ChatType.SUPERGROUP)
+    _command_chat_cache = (chat_ref, chat_stub)
+    return chat_stub
+
+
+async def _trigger_qbleech(link: str, title: str) -> None:
+    chat_ref = _monitor_command_chat or config_dict.get('AUTO_TBL_COMMAND_CHAT') or config_dict.get('AUTO_TBL_CHANNEL')
+    if not chat_ref:
+        LOGGER.info("AUTO_TBL_COMMAND_CHAT not configured; skipping qBittorrent trigger for %s", link)
+        return
+    chat = await _resolve_command_chat(chat_ref)
+    if chat is None:
+        return
+    if chat.type is None:
+        chat.type = ChatType.SUPERGROUP if str(chat.id).startswith('-100') else ChatType.PRIVATE
+    auto_message = _AutoCommandMessage(chat, link, title or "TamilAuto")
+    try:
+        _mirror_leech(bot, auto_message, isQbit=True, isLeech=True)
+        LOGGER.info("Queued TamilBlasters torrent for qBittorrent: %s", title or link)
     except Exception as exc:
-        LOGGER.error("Failed to trigger /%s for %s: %s", cmd_name, link, exc)
+        LOGGER.error("Failed to start qBittorrent download for %s: %s", link, exc)
 
 
 async def _tamilblasters_monitor(upload_chat: int | str) -> None:
@@ -172,7 +225,7 @@ async def _tamilblasters_monitor(upload_chat: int | str) -> None:
                         LOGGER.error("Failed to send torrent file %s: %s", file_["link"], exc)
                         continue
 
-                    await _trigger_qbleech(file_["link"])
+                    await _trigger_qbleech(file_["link"], file_["title"])
 
                 _monitor_seen_topics.add(topic_url)
 
@@ -192,11 +245,12 @@ async def _start_monitor(message) -> None:
         return
 
     async with _monitor_lock:
-        global _monitor_task, _monitor_command_chat
+        global _monitor_task, _monitor_command_chat, _command_chat_cache
         if _monitor_task and not _monitor_task.done():
             await sendMessage(message, "TamilBlasters auto-leech is already running.")
             return
         _monitor_command_chat = config_dict.get('AUTO_TBL_COMMAND_CHAT') or message.chat.id
+        _command_chat_cache = None
         _monitor_task = bot.loop.create_task(_tamilblasters_monitor(upload_chat))
     await sendMessage(message, "TamilBlasters auto-leech started. New torrents will be posted automatically.")
 
