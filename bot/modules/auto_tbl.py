@@ -45,7 +45,13 @@ class _AutoUser:
         if style in {"html"}:
             return f"<a href='tg://user?id={self.id}'>{self.first_name}</a>"
         if style in {"markdown", "markdownv2", "md", "mdv2"}:
-            safe_name = self.first_name.replace("[", "\\[").replace("]", "\\]")
+            safe_name = (
+                self.first_name.replace("\\", "\\\\")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+            )
             return f"[{safe_name}](tg://user?id={self.id})"
         return self.first_name
 
