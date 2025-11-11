@@ -37,10 +37,17 @@ class _AutoUser:
         self.id = user_id
         self.first_name = name
         self.username = None
+        self.is_bot = False
+        self.is_self = False
 
-    @property
-    def mention(self) -> str:
-        return f"<a href='tg://user?id={self.id}'>{self.first_name}</a>"
+    def mention(self, style: str = "html") -> str:
+        style = (style or "").lower()
+        if style in {"html"}:
+            return f"<a href='tg://user?id={self.id}'>{self.first_name}</a>"
+        if style in {"markdown", "markdownv2", "md", "mdv2"}:
+            safe_name = self.first_name.replace("[", "\\[").replace("]", "\\]")
+            return f"[{safe_name}](tg://user?id={self.id})"
+        return self.first_name
 
 
 class _AutoCommandMessage:
