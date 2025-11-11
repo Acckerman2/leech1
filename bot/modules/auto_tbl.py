@@ -2,6 +2,7 @@
 import asyncio
 import io
 import re
+from datetime import datetime, timezone
 from time import time
 from types import SimpleNamespace
 from typing import Dict, List, Optional
@@ -46,6 +47,7 @@ class _AutoCommandMessage:
     def __init__(self, chat: SimpleNamespace, link: str, title: str) -> None:
         self.chat = chat
         self.id = int(time() * 1000)
+        self.message_id = self.id
         self.text = f"/{BotCommands.QbLeechCommand[0]} {link}"
         self.reply_to_message = None
         self.reply_to_message_id = None
@@ -53,6 +55,7 @@ class _AutoCommandMessage:
         self.link = ""
         self.from_user = _AutoUser(OWNER_ID)
         self.title = title
+        self.date = datetime.now(timezone.utc)
 
     async def reply(self, text: str, **kwargs):
         kwargs.pop('quote', None)
