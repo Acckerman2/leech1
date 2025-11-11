@@ -400,7 +400,8 @@ f'''⌬ <b><i>Owner or Sudos Commands!</i></b>
 
 <b>Extras:</b>
 ┠ /{BotCommands.AddImageCommand} [url/photo]: Add Images in Bot
-┖ /{BotCommands.ImagesCommand}: Generate grid of Stored Images.''',
+┠ /{BotCommands.ImagesCommand}: Generate grid of Stored Images.
+┖ /{BotCommands.AutoTamilCommand}: Start TamilBlasters auto leech (/atl start/stop).''',
 
 f'''⌬ <b><i>Miscellaneous Commands!</i></b>
 

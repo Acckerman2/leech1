@@ -343,6 +343,22 @@ if RSS_CHAT.isdigit() or RSS_CHAT.startswith('-'):
 RSS_DELAY = environ.get('RSS_DELAY', '')
 RSS_DELAY = 600 if len(RSS_DELAY) == 0 else int(RSS_DELAY)
 
+AUTO_TBL_CHANNEL = environ.get('AUTO_TBL_CHANNEL', '')
+if len(AUTO_TBL_CHANNEL) == 0:
+    AUTO_TBL_CHANNEL = ''
+elif AUTO_TBL_CHANNEL.isdigit() or AUTO_TBL_CHANNEL.startswith('-'):
+    AUTO_TBL_CHANNEL = int(AUTO_TBL_CHANNEL)
+
+AUTO_TBL_COMMAND_CHAT = environ.get('AUTO_TBL_COMMAND_CHAT', '')
+if len(AUTO_TBL_COMMAND_CHAT) == 0:
+    AUTO_TBL_COMMAND_CHAT = AUTO_TBL_CHANNEL if AUTO_TBL_CHANNEL else ''
+elif AUTO_TBL_COMMAND_CHAT.isdigit() or AUTO_TBL_COMMAND_CHAT.startswith('-'):
+    AUTO_TBL_COMMAND_CHAT = int(AUTO_TBL_COMMAND_CHAT)
+
+if AUTO_TBL_COMMAND_CHAT:
+    user_data.setdefault(AUTO_TBL_COMMAND_CHAT, {})
+    user_data[AUTO_TBL_COMMAND_CHAT]['is_auth'] = True
+
 TORRENT_TIMEOUT = environ.get('TORRENT_TIMEOUT', '')
 TORRENT_TIMEOUT = '' if len(TORRENT_TIMEOUT) == 0 else int(TORRENT_TIMEOUT)
 
@@ -679,6 +695,8 @@ config_dict = {'ANIME_TEMPLATE': ANIME_TEMPLATE,
                'RCLONE_SERVE_USER': RCLONE_SERVE_USER,
                'RCLONE_SERVE_PASS': RCLONE_SERVE_PASS,
                'RCLONE_SERVE_PORT': RCLONE_SERVE_PORT,
+               'AUTO_TBL_CHANNEL': AUTO_TBL_CHANNEL,
+               'AUTO_TBL_COMMAND_CHAT': AUTO_TBL_COMMAND_CHAT,
                'RSS_CHAT': RSS_CHAT,
                'RSS_DELAY': RSS_DELAY,
                'SAVE_MSG': SAVE_MSG,
