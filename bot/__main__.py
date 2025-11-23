@@ -6,6 +6,17 @@ from asyncio import create_subprocess_exec, gather, run as asyrun
 from uuid import uuid4
 from base64 import b64decode
 from importlib import import_module, reload
+from threading import Thread
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return 'OK'
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8000)
 
 from requests import get as rget
 from pytz import timezone
@@ -242,6 +253,7 @@ async def log_check():
     
 
 async def main():
+    Thread(target=run_flask, daemon=True).start()
     await gather(start_cleanup(), torrent_search.initiate_search_tools(), restart_notification(), search_images(), set_commands(bot), log_check())
     await sync_to_async(start_aria2_listener, wait=False)
     
